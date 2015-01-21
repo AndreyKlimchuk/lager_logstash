@@ -37,7 +37,9 @@
 
 -record(state, {
           handle :: handle() | undefined,
-          output :: lager_logstash_backend:output()
+          host :: inet:hostname() | undefined,
+          port :: inet:port_number() | undefined,
+          type :: tcp | udp | file
          }).
 
 %%%===================================================================
@@ -70,8 +72,8 @@ start_link(Name, Output) ->
 %% @end
 %%--------------------------------------------------------------------
 init([Output]) ->
-    Handle = connect(Output),
-    {ok, #state{handle=Handle, output=Output}}.
+    State = connect(Output),
+    {ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -134,11 +136,11 @@ handle_info(_Info, State) ->
 %% @end
 %%--------------------------------------------------------------------
 terminate(_Reason, #state{handle = undefined}) -> ok;
-terminate(_Reason, #state{output = {tcp, _, _}, handle = Socket}) ->
+terminate(_Reason, #state{type = tcp, handle = Socket}) ->
     ok = gen_tcp:close(Socket);
-terminate(_Reason, #state{output = {udp, _, _}, handle = Socket}) ->
+terminate(_Reason, #state{type = udp, handle = Socket}) ->
     ok = gen_udp:close(Socket);
-terminate(_Reason, #state{output = {file, _}, handle = Fd}) ->
+terminate(_Reason, #state{type = file, handle = Fd}) ->
     ok = file:close(Fd).
 
 %%--------------------------------------------------------------------
@@ -159,25 +161,31 @@ code_change(_OldVsn, State, _Extra) ->
 connect({tcp, Host, Port}) ->
     Opts = [binary, {active, false}, {keepalive, true}],
     case gen_tcp:connect(Host, Port, Opts) of
-        {ok, Socket} -> Socket;
-        {error, _}   -> undefined
+        {ok, Socket} -> #state{type = tcp, handle = Socket};
+        {error, _}   -> #state{handle=undefined}
     end;
-connect({udp, _, _}) ->
+connect({tcp, Host, Port, Timeout}) ->
+    Opts = [binary, {active, false}, {keepalive, true}],
+    case gen_tcp:connect(Host, Port, Opts, Timeout) of
+        {ok, Socket} -> #state{type = tcp, handle = Socket};
+        {error, _}   -> #state{handle=undefined}
+    end;
+connect({udp, Host, Port}) ->
     Opts = [binary],
     case gen_udp:open(0, Opts) of
-        {ok, Socket} -> Socket;
-        {error, _}   -> undefined
+        {ok, Socket} -> #state{type = udp, host = Host, port = Port, handle = Socket};
+        {error, _}   -> #state{handle=undefined}
     end;
 connect({file, Path}) ->
     case file:open(Path, [append]) of
-        {ok, Fd}   -> Fd;
-        {error, _} -> undefined
+        {ok, Fd}   -> #state{type=file, handle = Fd};
+        {error, _} -> #state{handle=undefined}
     end.
 
-send_log(Payload, #state{output = {tcp, _, _}, handle = Socket}) ->
+send_log(Payload, #state{type = tcp, handle = Socket}) ->
     ok = gen_tcp:send(Socket, Payload);
-send_log(Payload, #state{output = {udp, Host, Port}, handle = Socket}) ->
+send_log(Payload, #state{type = udp, host = Host, port = Port, handle = Socket}) ->
     ok = gen_udp:send(Socket, Host, Port, Payload);
-send_log(Payload, #state{output = {file, _}, handle = Fd}) ->
+send_log(Payload, #state{type = file, handle = Fd}) ->
     ok = file:write(Fd, Payload).
 

@@ -37,7 +37,8 @@
 -define(DEFAULT_ENCODER, jsx).
 
 -type output() :: tcp() | udp() | file().
--type tcp() :: {tcp, inet:hostname(), inet:port_number()}.
+-type tcp() :: {tcp, inet:hostname(), inet:port_number()} |
+               {tcp, inet:hostname(), inet:port_number(), non_neg_integer() | infinity}.
 -type udp() :: {udp, inet:hostname(), inet:port_number()}.
 -type file() :: {file, string()}.
 -type format() :: json.
