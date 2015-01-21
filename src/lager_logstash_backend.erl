@@ -29,12 +29,13 @@
 -export([terminate/2]).
 -export([code_change/3]).
 
+-export_type([output/0]).
+
 -define(DEFAULT_LEVEL, info).
 -define(DEFAULT_OUTPUT, {tcp, "localhost", 5000}).
 -define(DEFAULT_FORMAT, json).
 -define(DEFAULT_ENCODER, jsx).
 
--type handle() :: gen_tcp:socket() | gen_udp:socket() | file:fd().
 -type output() :: tcp() | udp() | file().
 -type tcp() :: {tcp, inet:hostname(), inet:port_number()}.
 -type udp() :: {udp, inet:hostname(), inet:port_number()}.
@@ -43,7 +44,7 @@
 -type json_encoder() :: jsx | jiffy.
 
 -record(state, {
-          handle :: handle() | undefined,
+          worker :: atom() | undefine,
           level :: lager:log_level_number(),
           output :: output(),
           format :: format(),
@@ -57,10 +58,7 @@ init(Args) ->
     Format = arg(format, Args, ?DEFAULT_FORMAT),
     Encoder = arg(json_encoder, Args, ?DEFAULT_ENCODER),
 
-    Handle = connect(Output),
-
-    {ok, #state{handle = Handle,
-                output = Output,
+    {ok, #state{output = Output,
                 format = Format,
                 json_encoder = Encoder,
                 level = LevelNumber}}.
@@ -69,24 +67,6 @@ arg(Name, Args, Default) ->
     case lists:keyfind(Name, 1, Args) of
         {Name, Value} -> Value;
         false         -> Default
-    end.
-
-connect({tcp, Host, Port}) ->
-    Opts = [binary, {active, false}, {keepalive, true}],
-    case gen_tcp:connect(Host, Port, Opts) of
-        {ok, Socket} -> Socket;
-        {error, _}   -> undefined
-    end;
-connect({udp, _, _}) ->
-    Opts = [binary],
-    case gen_udp:open(0, Opts) of
-        {ok, Socket} -> Socket;
-        {error, _}   -> undefined
-    end;
-connect({file, Path}) ->
-    case file:open(Path, [append]) of
-        {ok, Fd}   -> Fd;
-        {error, _} -> undefined
     end.
 
 handle_call({set_loglevel, Level}, State) ->
@@ -98,7 +78,7 @@ handle_call(get_loglevel, #state{level = LevelNumber} = State) ->
 handle_call(_Request, State) ->
     {ok, ok, State}.
 
-handle_event({log, _}, #state{handle = undefined} = State) ->
+handle_event({log, _}, #state{worker = undefined} = State) ->
     {ok, State};
 handle_event({log, Message}, State) ->
     _ = handle_log(Message, State),
@@ -121,23 +101,19 @@ handle_log(LagerMsg, #state{level = Level,
 format(json, Message, Config) ->
     lager_logstash_json_formatter:format(Message, Config).
 
-send_log(Payload, #state{output = {tcp, _, _}, handle = Socket}) ->
-    ok = gen_tcp:send(Socket, Payload);
-send_log(Payload, #state{output = {udp, Host, Port}, handle = Socket}) ->
-    ok = gen_udp:send(Socket, Host, Port, Payload);
-send_log(Payload, #state{output = {file, _}, handle = Fd}) ->
-    ok = file:write(Fd, Payload).
-
 handle_info(_Info, State) ->
     {ok, State}.
 
-terminate(_Reason, #state{handle = undefined}) -> ok;
-terminate(_Reason, #state{output = {tcp, _, _}, handle = Socket}) ->
-    ok = gen_tcp:close(Socket);
-terminate(_Reason, #state{output = {udp, _, _}, handle = Socket}) ->
-    ok = gen_udp:close(Socket);
-terminate(_Reason, #state{output = {file, _}, handle = Fd}) ->
-    ok = file:close(Fd).
+terminate(_Reason, #state{worker = undefined}) -> ok;
+terminate(_Reason, #state{worker = Worker}) ->
+    gen_server:cast(Worker, shutdown),
+    ok.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
+
+send_log(_Payload, #state{worker = undefined}) ->
+    ok;
+send_log(Payload, #state{worker = Worker}) ->
+    gen_server:cast(Worker, {log, Payload}).
+
