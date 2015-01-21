@@ -58,7 +58,13 @@ init(Args) ->
     Format = arg(format, Args, ?DEFAULT_FORMAT),
     Encoder = arg(json_encoder, Args, ?DEFAULT_ENCODER),
 
-    {ok, #state{output = Output,
+    Ref = make_ref(),
+    Worker = list_to_atom("lager_logstash_" ++ erlang:ref_to_list(Ref)),
+
+    lager_logstash_sup:start_worker(Worker, Output),
+
+    {ok, #state{worker = Worker,
+                output = Output,
                 format = Format,
                 json_encoder = Encoder,
                 level = LevelNumber}}.
