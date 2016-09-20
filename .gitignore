@@ -2,3 +2,4 @@
 *.beam
 /ebin/
 /.eunit/
+_build
