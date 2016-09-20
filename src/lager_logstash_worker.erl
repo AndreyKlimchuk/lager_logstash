@@ -110,8 +110,8 @@ handle_call(_Request, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast(shutdown, State) ->
     {stop, normal, State};
-handle_cast({log, _Payload}, initializing) ->
-    {noreply, initializing};
+handle_cast({log, Payload}, {initializing, _} = State) ->
+    {noreply, reconnect_buf_queue(Payload, State)};
 handle_cast({log, Payload}, State) ->
     ok = send_log(Payload, State),
     {noreply, State};
@@ -128,16 +128,15 @@ handle_cast(_Msg, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_info({reconnect, Output}, initializing) ->
+handle_info({reconnect, Output}, {initializing, _} = BufState) ->
     case connect(Output) of
         {ok, State} ->
-            {noreply, State};
+            {noreply, reconnect_buf_drain(BufState, State)};
         {error, timeout} ->
             timer:send_after(?RECONNECT_TIMEOUT, self(), {reconnect, Output}),
-            {noreply, initializing}
+            {noreply, BufState}
     end;
 handle_info({tcp, S, _Data}, State) ->
-    %% Drain incoming stuff
     inet:setopts(S, [{active, once}]),
     {noreply, State};
 handle_info({tcp_closed, S}, #state { config = Conf, handle = S }) ->
@@ -211,4 +210,19 @@ send_log(Payload, #state { config = {file, _}, handle = Fd}) ->
     ok = file:write(Fd, Payload).
 
 %% -- Reconnect Buffering ---------------------------------------
-reconnect_buf_init() -> initializing.
+reconnect_buf_init() -> {initializing, {0, []}}.
+
+reconnect_buf_queue(Payload, {initializing, {N, _Msgs}}) when N > 500 ->
+    %% Buffer to big, cycle!
+    {initializing, {1, [Payload]}};
+reconnect_buf_queue(Payload, {initializing, {N, Msgs}}) ->
+    {initializing, {N+1, [Payload | Msgs]}}.
+
+reconnect_buf_drain({initializing, {_N, Ps}}, State) ->
+    drain(Ps, State).
+    
+drain([], State) -> State;
+drain([P | Ps], State) ->
+    send_log(P, State),
+    drain(Ps, State).
+
