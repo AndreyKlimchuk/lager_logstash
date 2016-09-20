@@ -220,7 +220,7 @@ reconnect_buf_queue(Payload, {initializing, {N, Msgs}}) ->
     {initializing, {N+1, [Payload | Msgs]}}.
 
 reconnect_buf_drain({initializing, {_N, Ps}}, State) ->
-    drain(Ps, State).
+    drain(lists:reverse(Ps), State).
     
 drain([], State) -> State;
 drain([P | Ps], State) ->
