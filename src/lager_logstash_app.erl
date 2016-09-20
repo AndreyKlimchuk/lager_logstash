@@ -47,12 +47,7 @@
 %% @end
 %%--------------------------------------------------------------------
 start(_StartType, _StartArgs) ->
-    case lager_logstash_sup:start_link() of
-        {ok, Pid} ->
-            {ok, Pid};
-        Error ->
-            Error
-    end.
+    lager_logstash_sup:start_link().
 
 %%--------------------------------------------------------------------
 %% @private
