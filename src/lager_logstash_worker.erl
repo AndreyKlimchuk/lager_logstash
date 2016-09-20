@@ -184,7 +184,8 @@ connect({tcp, Host, Port, Timeout} = Conf) ->
     case gen_tcp:connect(Host, Port, Opts, Timeout) of
         {ok, Socket} ->
             {ok, #state{ config = Conf, handle = Socket }};
-        {error, _}   -> #state{handle=undefined}
+        {error, Reason}   ->
+            {error, Reason}
     end;
 connect({udp, _, _} = Conf) ->
     Opts = [binary],

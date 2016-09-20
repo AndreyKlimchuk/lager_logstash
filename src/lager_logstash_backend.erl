@@ -46,7 +46,7 @@
 
 -record(state, {
           worker :: pid() | undefined,
-          monitor :: reference(),
+          monitor :: reference() | undefined,
           level :: lager:log_level_number(),
           output :: output(),
           format :: format(),
