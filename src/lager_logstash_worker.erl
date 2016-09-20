@@ -25,22 +25,28 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/2]).
+-export([start_link/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 
 -define(SERVER, ?MODULE).
+-define(DEFAULT_TIMEOUT, 5000).
+-define(RECONNECT_TIMEOUT, 15*1000).
 
 -type handle() :: gen_tcp:socket() | gen_udp:socket() | file:fd().
 
+-type config() ::
+      {tcp, inet:hostname(), inet:port_number()}
+    | {tcp, inet:hostname(), inet:port_number(), pos_integer()}
+    | {udp, inet:hostname(), inet:port_number()}
+    | {file, string()}.
+
 -record(state, {
           handle :: handle() | undefined,
-          host :: inet:hostname() | undefined,
-          port :: inet:port_number() | undefined,
-          type :: tcp | udp | file
-         }).
+          config :: config()
+        }).
 
 %%%===================================================================
 %%% API
@@ -53,8 +59,8 @@
 %% @spec start_link() -> {ok, Pid} | ignore | {error, Error}
 %% @end
 %%--------------------------------------------------------------------
-start_link(Name, Output) ->
-    gen_server:start_link({local, Name}, ?MODULE, [Output], []).
+start_link(Output) ->
+    gen_server:start_link(?MODULE, [Output], []).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -72,9 +78,9 @@ start_link(Name, Output) ->
 %% @end
 %%--------------------------------------------------------------------
 init([Output]) ->
-    State = connect(Output),
-    {ok, State}.
-
+    self() ! {reconnect, Output},
+    {ok, initializing}.
+    
 %%--------------------------------------------------------------------
 %% @private
 %% @doc
@@ -90,8 +96,7 @@ init([Output]) ->
 %% @end
 %%--------------------------------------------------------------------
 handle_call(_Request, _From, State) ->
-    Reply = ok,
-    {reply, Reply, State}.
+    {reply, ok, State}.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -105,6 +110,8 @@ handle_call(_Request, _From, State) ->
 %%--------------------------------------------------------------------
 handle_cast(shutdown, State) ->
     {stop, normal, State};
+handle_cast({log, _Payload}, initializing) ->
+    {noreply, initializing};
 handle_cast({log, Payload}, State) ->
     ok = send_log(Payload, State),
     {noreply, State};
@@ -121,6 +128,21 @@ handle_cast(_Msg, State) ->
 %%                                   {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
+handle_info({reconnect, Output}, initializing) ->
+    case connect(Output) of
+        {ok, State} ->
+            {noreply, State};
+        {error, timeout} ->
+            timer:send_after(?RECONNECT_TIMEOUT, self(), {reconnect, Output}),
+            {noreply, initializing}
+    end;
+handle_info({tcp, S, _Data}, State) ->
+    %% Drain incoming stuff
+    inet:setopts(S, [{active, once}]),
+    {noreply, State};
+handle_info({udp, S, _IP, _Port, _Data}, State) ->
+    inet:setopts(S, [{active, once}]),
+    {noreply, State};
 handle_info(_Info, State) ->
     {noreply, State}.
 
@@ -135,13 +157,8 @@ handle_info(_Info, State) ->
 %% @spec terminate(Reason, State) -> void()
 %% @end
 %%--------------------------------------------------------------------
-terminate(_Reason, #state{handle = undefined}) -> ok;
-terminate(_Reason, #state{type = tcp, handle = Socket}) ->
-    ok = gen_tcp:close(Socket);
-terminate(_Reason, #state{type = udp, handle = Socket}) ->
-    ok = gen_udp:close(Socket);
-terminate(_Reason, #state{type = file, handle = Fd}) ->
-    ok = file:close(Fd).
+terminate(_Reason, _State) ->
+    ok.
 
 %%--------------------------------------------------------------------
 %% @private
@@ -159,33 +176,33 @@ code_change(_OldVsn, State, _Extra) ->
 %%%===================================================================
 
 connect({tcp, Host, Port}) ->
-    Opts = [binary, {active, false}, {keepalive, true}],
-    case gen_tcp:connect(Host, Port, Opts) of
-        {ok, Socket} -> #state{type = tcp, handle = Socket};
-        {error, _}   -> #state{handle=undefined}
-    end;
-connect({tcp, Host, Port, Timeout}) ->
+    connect({tcp, Host, Port, ?DEFAULT_TIMEOUT});
+connect({tcp, Host, Port, Timeout} = Conf) ->
     Opts = [binary, {active, false}, {keepalive, true}],
     case gen_tcp:connect(Host, Port, Opts, Timeout) of
-        {ok, Socket} -> #state{type = tcp, handle = Socket};
+        {ok, Socket} ->
+            {ok, #state{ config = Conf, handle = Socket }};
         {error, _}   -> #state{handle=undefined}
     end;
-connect({udp, Host, Port}) ->
+connect({udp, _, _} = Conf) ->
     Opts = [binary],
     case gen_udp:open(0, Opts) of
-        {ok, Socket} -> #state{type = udp, host = Host, port = Port, handle = Socket};
-        {error, _}   -> #state{handle=undefined}
+        {ok, Socket} ->
+            {ok, #state{ config = Conf, handle = Socket }};
+        {error, Reason} ->
+            {error, Reason}
     end;
-connect({file, Path}) ->
+connect({file, Path} = Conf) ->
     case file:open(Path, [append]) of
-        {ok, Fd}   -> #state{type=file, handle = Fd};
-        {error, _} -> #state{handle=undefined}
+        {ok, Fd}   ->
+            {ok, #state{ config = Conf, handle = Fd}};
+        {error, Reason} ->
+            {error, Reason}
     end.
 
-send_log(Payload, #state{type = tcp, handle = Socket}) ->
+send_log(Payload, #state { config = {tcp, _, _, _}, handle = Socket}) ->
     ok = gen_tcp:send(Socket, Payload);
-send_log(Payload, #state{type = udp, host = Host, port = Port, handle = Socket}) ->
+send_log(Payload, #state { config = {udp, Host, Port}, handle = Socket}) ->
     ok = gen_udp:send(Socket, Host, Port, Payload);
-send_log(Payload, #state{type = file, handle = Fd}) ->
+send_log(Payload, #state { config = {file, _}, handle = Fd}) ->
     ok = file:write(Fd, Payload).
-
