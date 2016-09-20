@@ -45,7 +45,8 @@
 -type json_encoder() :: jsx | jiffy.
 
 -record(state, {
-          worker :: atom() | undefine,
+          worker :: pid() | undefined,
+          monitor :: reference(),
           level :: lager:log_level_number(),
           output :: output(),
           format :: format(),
@@ -59,16 +60,11 @@ init(Args) ->
     Format = arg(format, Args, ?DEFAULT_FORMAT),
     Encoder = arg(json_encoder, Args, ?DEFAULT_ENCODER),
 
-    Ref = make_ref(),
-    Worker = list_to_atom("lager_logstash_" ++ erlang:ref_to_list(Ref)),
-
-    lager_logstash_sup:start_worker(Worker, Output),
-
-    {ok, #state{worker = Worker,
-                output = Output,
-                format = Format,
-                json_encoder = Encoder,
-                level = LevelNumber}}.
+    {ok, create_worker(#state{
+        output = Output,
+        format = Format,
+        json_encoder = Encoder,
+        level = LevelNumber }) }.
 
 arg(Name, Args, Default) ->
     case lists:keyfind(Name, 1, Args) of
@@ -108,19 +104,26 @@ handle_log(LagerMsg, #state{level = Level,
 format(json, Message, Config) ->
     lager_logstash_json_formatter:format(Message, Config).
 
+handle_info({'DOWN', Mon, _, _, _}, #state { monitor = Mon } = State) ->
+    {ok, create_worker(State)};
 handle_info(_Info, State) ->
     {ok, State}.
 
-terminate(_Reason, #state{worker = undefined}) -> ok;
-terminate(_Reason, #state{worker = Worker}) ->
-    gen_server:cast(Worker, shutdown),
-    ok.
+terminate(_Reason, #state{}) -> ok.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.
 
-send_log(_Payload, #state{worker = undefined}) ->
-    ok;
+send_log(_Payload, #state{worker = undefined}) -> ok;
 send_log(Payload, #state{worker = Worker}) ->
     gen_server:cast(Worker, {log, Payload}).
 
+create_worker(#state { output = Output } = State) ->
+    {ok, WorkerPid} = lager_logstash_sup:start_worker(Output),
+    Mon = erlang:monitor(process, WorkerPid),
+    State#state {
+        monitor = Mon,
+        worker = WorkerPid
+    }.
+
+    
