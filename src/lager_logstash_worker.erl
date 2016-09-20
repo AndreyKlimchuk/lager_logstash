@@ -79,7 +79,7 @@ start_link(Output) ->
 %%--------------------------------------------------------------------
 init([Output]) ->
     self() ! {reconnect, Output},
-    {ok, initializing}.
+    {ok, reconnect_buf_init()}.
     
 %%--------------------------------------------------------------------
 %% @private
@@ -140,6 +140,9 @@ handle_info({tcp, S, _Data}, State) ->
     %% Drain incoming stuff
     inet:setopts(S, [{active, once}]),
     {noreply, State};
+handle_info({tcp_closed, S}, #state { config = Conf, handle = S }) ->
+    timer:send_after(?RECONNECT_TIMEOUT, self(), {reconnect, Conf}),
+    {noreply, reconnect_buf_init()};
 handle_info({udp, S, _IP, _Port, _Data}, State) ->
     inet:setopts(S, [{active, once}]),
     {noreply, State};
@@ -206,3 +209,6 @@ send_log(Payload, #state { config = {udp, Host, Port}, handle = Socket}) ->
     ok = gen_udp:send(Socket, Host, Port, Payload);
 send_log(Payload, #state { config = {file, _}, handle = Fd}) ->
     ok = file:write(Fd, Payload).
+
+%% -- Reconnect Buffering ---------------------------------------
+reconnect_buf_init() -> initializing.
