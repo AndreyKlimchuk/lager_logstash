@@ -33,7 +33,6 @@
 
 -define(DEFAULT_LEVEL, info).
 -define(DEFAULT_OUTPUT, {tcp, "localhost", 5000}).
--define(DEFAULT_FORMAT, json).
 -define(DEFAULT_ENCODER, jsx).
 
 -type output() :: tcp() | udp() | file().
@@ -57,7 +56,6 @@ init(Args) ->
     Level = arg(level, Args, ?DEFAULT_LEVEL),
     LevelNumber = lager_util:level_to_num(Level),
     Output = arg(output, Args, ?DEFAULT_OUTPUT),
-    Format = arg(format, Args, ?DEFAULT_FORMAT),
     Encoder = #{ json_encoder => arg(json_encoder, Args, ?DEFAULT_ENCODER)},
 
     {ok, create_worker(#state{
@@ -90,12 +88,12 @@ handle_event(_Event, State) ->
     {ok, State}.
 
 handle_log(LagerMsg, #state{level = Level,
-                            format = Format,
                             encoder = Encoder} = State) ->
     Severity = lager_msg:severity(LagerMsg),
     case lager_util:level_to_num(Severity) =< Level of
         true ->
-            Payload = lager_logstash_json_formatter:format(Format, LagerMsg, Encoder),
+            Payload = lager_logstash_json_formatter:format(LagerMsg, Encoder)
+            end,
             send_log(Payload, State);
         false -> skip
     end.
