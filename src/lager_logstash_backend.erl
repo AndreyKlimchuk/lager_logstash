@@ -94,7 +94,9 @@ handle_log(LagerMsg, #state{level = Level,
         false -> skip
     end.
 
-handle_info({'DOWN', Mon, _, _, {shutdown, _}}, State) ->
+handle_info({'DOWN', Mon, _, _, shutdown}, #state { monitor = Mon } = State) ->
+    {ok, State};
+handle_info({'DOWN', Mon, _, _, {shutdown, _}}, #state { monitor = Mon } = State) ->
     {ok, State};
 handle_info({'DOWN', Mon, _, _, _}, #state { monitor = Mon } = State) ->
     {ok, create_worker(State)};
