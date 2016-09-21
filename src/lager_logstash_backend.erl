@@ -40,7 +40,6 @@
                {tcp, inet:hostname(), inet:port_number(), non_neg_integer() | infinity}.
 -type udp() :: {udp, inet:hostname(), inet:port_number()}.
 -type file() :: {file, string()}.
--type format() :: json.
 -type json_encoder() :: #{ atom() => term() }.
 
 -record(state, {
@@ -48,7 +47,6 @@
           monitor :: reference() | undefined,
           level :: lager:log_level_number(),
           output :: output(),
-          format :: format(),
           encoder :: json_encoder()
          }).
 
@@ -60,7 +58,6 @@ init(Args) ->
 
     {ok, create_worker(#state{
         output = Output,
-        format = Format,
         encoder = Encoder,
         level = LevelNumber }) }.
 
@@ -92,8 +89,7 @@ handle_log(LagerMsg, #state{level = Level,
     Severity = lager_msg:severity(LagerMsg),
     case lager_util:level_to_num(Severity) =< Level of
         true ->
-            Payload = lager_logstash_json_formatter:format(LagerMsg, Encoder)
-            end,
+            Payload = lager_logstash_json_formatter:format(LagerMsg, Encoder),
             send_log(Payload, State);
         false -> skip
     end.
