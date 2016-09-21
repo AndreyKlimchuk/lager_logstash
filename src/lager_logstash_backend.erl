@@ -42,7 +42,7 @@
 -type udp() :: {udp, inet:hostname(), inet:port_number()}.
 -type file() :: {file, string()}.
 -type format() :: json.
--type json_encoder() :: jsx | jiffy.
+-type json_encoder() :: #{ atom() => term() }.
 
 -record(state, {
           worker :: pid() | undefined,
@@ -50,7 +50,7 @@
           level :: lager:log_level_number(),
           output :: output(),
           format :: format(),
-          json_encoder :: json_encoder()
+          encoder :: json_encoder()
          }).
 
 init(Args) ->
@@ -58,12 +58,12 @@ init(Args) ->
     LevelNumber = lager_util:level_to_num(Level),
     Output = arg(output, Args, ?DEFAULT_OUTPUT),
     Format = arg(format, Args, ?DEFAULT_FORMAT),
-    Encoder = arg(json_encoder, Args, ?DEFAULT_ENCODER),
+    Encoder = #{ json_encoder => arg(json_encoder, Args, ?DEFAULT_ENCODER)},
 
     {ok, create_worker(#state{
         output = Output,
         format = Format,
-        json_encoder = Encoder,
+        encoder = Encoder,
         level = LevelNumber }) }.
 
 arg(Name, Args, Default) ->
@@ -91,18 +91,14 @@ handle_event(_Event, State) ->
 
 handle_log(LagerMsg, #state{level = Level,
                             format = Format,
-                            json_encoder = Encoder} = State) ->
+                            encoder = Encoder} = State) ->
     Severity = lager_msg:severity(LagerMsg),
     case lager_util:level_to_num(Severity) =< Level of
         true ->
-            Config = [{json_encoder, Encoder}],
-            Payload = format(Format, LagerMsg, Config),
+            Payload = lager_logstash_json_formatter:format(Format, LagerMsg, Encoder),
             send_log(Payload, State);
         false -> skip
     end.
-
-format(json, Message, Config) ->
-    lager_logstash_json_formatter:format(Message, Config).
 
 handle_info({'DOWN', Mon, _, _, _}, #state { monitor = Mon } = State) ->
     {ok, create_worker(State)};

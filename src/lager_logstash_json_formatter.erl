@@ -24,30 +24,24 @@
 -export([format/2]).
 -export([format/3]).
 
--define(DEFAULT_JSON_FORMATTER, jsx).
-
-format(LagerMsg, Config) ->
-    Encoder = value(json_encoder, Config, ?DEFAULT_JSON_FORMATTER),
+format(LagerMsg, #{ json_encoder := Encoder }) ->
     Level = lager_msg:severity(LagerMsg),
     Timestamp = timestamp(lager_msg:datetime(LagerMsg)),
     Message = lager_msg:message(LagerMsg),
     Metadata = lager_msg:metadata(LagerMsg),
-    Data = [{type, lager_logstash},
-            {level, Level},
-            {'@timestamp', Timestamp},
-            {message, Message} | Metadata],
+    Data = [
+        {type, lager_logstash},
+        {level, Level},
+        {'@timestamp', Timestamp},
+        {message, Message} | convert_metadata(Metadata)],
     [encode(Encoder, convert(Data)), $\n].
 
 format(Message, Config, _) ->
     format(Message, Config).
 
-value(Name, Config, Default) ->
-    case lists:keyfind(Name, 1, Config) of
-        {Name, Value} -> Value;
-        false         -> Default
-    end.
-
 timestamp({Date, Time}) -> [Date, $T, Time].
+
+convert_metadata(M) -> M.
 
 convert(Data) -> lists:foldl(fun convert/2, [], Data).
 
