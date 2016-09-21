@@ -99,7 +99,10 @@ handle_info({'DOWN', Mon, _, _, _}, #state { monitor = Mon } = State) ->
 handle_info(_Info, State) ->
     {ok, State}.
 
-terminate(_Reason, #state{}) -> ok.
+terminate(_Reason, #state{ monitor = Mon, worker = Pid }) ->
+    erlang:demonitor(Mon, [flush]),
+    lager_logstash_worker:stop(Pid),
+    ok.
 
 code_change(_OldVsn, State, _Extra) ->
     {ok, State}.

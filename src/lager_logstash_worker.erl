@@ -25,7 +25,7 @@
 -behaviour(gen_server).
 
 %% API
--export([start_link/1]).
+-export([start_link/1, stop/1]).
 
 %% gen_server callbacks
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
@@ -61,6 +61,9 @@
 %%--------------------------------------------------------------------
 start_link(Output) ->
     gen_server:start_link(?MODULE, [Output], []).
+
+stop(Pid) ->
+    gen_server:cast(Pid, stop).
 
 %%%===================================================================
 %%% gen_server callbacks
@@ -108,7 +111,7 @@ handle_call(_Request, _From, State) ->
 %%                                  {stop, Reason, State}
 %% @end
 %%--------------------------------------------------------------------
-handle_cast(shutdown, State) ->
+handle_cast(stop, State) ->
     {stop, normal, State};
 handle_cast({log, Payload}, {initializing, _} = State) ->
     {noreply, reconnect_buf_queue(Payload, State)};
