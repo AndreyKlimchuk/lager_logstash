@@ -34,31 +34,36 @@
 -define(DEFAULT_LEVEL, info).
 -define(DEFAULT_OUTPUT, {tcp, "localhost", 5000}).
 -define(DEFAULT_ENCODER, jsx).
+-define(DEFAULT_TAG, undefined).
 
 -type output() :: tcp() | udp() | file().
 -type tcp() :: {tcp, inet:hostname(), inet:port_number()} |
                {tcp, inet:hostname(), inet:port_number(), non_neg_integer() | infinity}.
 -type udp() :: {udp, inet:hostname(), inet:port_number()}.
 -type file() :: {file, string()}.
--type json_encoder() :: #{ atom() => term() }.
+-type configuration() :: #{ atom() => term() }.
 
 -record(state, {
           worker :: pid() | undefined,
           monitor :: reference() | undefined,
           level :: lager:log_level_number(),
           output :: output(),
-          encoder :: json_encoder()
+          config :: configuration()
          }).
 
 init(Args) ->
     Level = arg(level, Args, ?DEFAULT_LEVEL),
     LevelNumber = lager_util:level_to_num(Level),
     Output = arg(output, Args, ?DEFAULT_OUTPUT),
-    Encoder = #{ json_encoder => arg(json_encoder, Args, ?DEFAULT_ENCODER)},
+    Encoder = arg(json_encoder, Args, ?DEFAULT_ENCODER),
+    Config = case read_tag(arg(tag, Args, ?DEFAULT_TAG)) of
+        undefined -> #{ json_encoder => Encoder, tag => undefined };
+        T -> #{ json_encoder => Encoder, tag => T }
+    end,
 
     {ok, create_worker(#state{
         output = Output,
-        encoder = Encoder,
+        config = Config,
         level = LevelNumber }) }.
 
 arg(Name, Args, Default) ->
@@ -84,12 +89,11 @@ handle_event({log, Message}, State) ->
 handle_event(_Event, State) ->
     {ok, State}.
 
-handle_log(LagerMsg, #state{level = Level,
-                            encoder = Encoder} = State) ->
+handle_log(LagerMsg, #state{level = Level, config = Config} = State) ->
     Severity = lager_msg:severity(LagerMsg),
     case lager_util:level_to_num(Severity) =< Level of
         true ->
-            Payload = lager_logstash_json_formatter:format(LagerMsg, Encoder),
+            Payload = lager_logstash_json_formatter:format(LagerMsg, Config),
             send_log(Payload, State);
         false -> skip
     end.
@@ -123,4 +127,6 @@ create_worker(#state { output = Output } = State) ->
         worker = WorkerPid
     }.
 
-    
+read_tag(undefined) -> undefined;
+read_tag(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8);
+read_tag(Str) when is_list(Str) -> iolist_to_binary(Str).

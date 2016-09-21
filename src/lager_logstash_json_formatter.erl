@@ -22,22 +22,22 @@
 -module(lager_logstash_json_formatter).
 
 -export([format/2]).
--export([format/3]).
 
-format(LagerMsg, #{ json_encoder := Encoder }) ->
+format(LagerMsg, #{ json_encoder := Encoder, tag := T }) ->
     Level = lager_msg:severity(LagerMsg),
     Timestamp = timestamp(lager_msg:datetime(LagerMsg)),
     Message = lager_msg:message(LagerMsg),
     Metadata = lager_msg:metadata(LagerMsg),
+    Tag = case T of
+       undefined -> [];
+       Val -> [{environment, Val}]
+    end,
     Data = [
         {type, lager_logstash},
         {level, Level},
         {'@timestamp', Timestamp},
         {message, Message} | convert_metadata(Metadata)],
-    [encode(Encoder, convert(Data)), $\n].
-
-format(Message, Config, _) ->
-    format(Message, Config).
+    [encode(Encoder, convert(Tag ++ Data)), $\n].
 
 timestamp({Date, Time}) -> [Date, $T, Time].
 
