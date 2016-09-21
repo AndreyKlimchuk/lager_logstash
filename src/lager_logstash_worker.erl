@@ -139,8 +139,8 @@ handle_info({reconnect, Output}, {initializing, _} = BufState) ->
             timer:send_after(?RECONNECT_TIMEOUT, self(), {reconnect, Output}),
             {noreply, BufState};
         {error, econnrefused} ->
-            timer:send_after(?RECONNECT_TIMEOUT, self(), {reconnect, Output})
-            {noreply, BufState};
+            timer:send_after(?RECONNECT_TIMEOUT, self(), {reconnect, Output}),
+            {noreply, BufState}
     end;
 handle_info({tcp, S, _Data}, State) ->
     inet:setopts(S, [{active, once}]),
