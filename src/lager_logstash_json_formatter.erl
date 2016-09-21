@@ -56,5 +56,5 @@ convert(Else, Acc) -> [Else | Acc].
 
 encode(jsx, Data)   -> jsx:encode(Data);
 encode(jiffy, Data) -> jiffy:encode({Data});
-encode(msgpack, Data) -> msgpack:pack(Data).
+encode(msgpack, Data) -> msgpack:pack(Data, [{pack_str, none}]).
 

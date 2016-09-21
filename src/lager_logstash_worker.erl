@@ -180,7 +180,7 @@ code_change(_OldVsn, State, _Extra) ->
 connect({tcp, Host, Port}) ->
     connect({tcp, Host, Port, ?DEFAULT_TIMEOUT});
 connect({tcp, Host, Port, Timeout} = Conf) ->
-    Opts = [binary, {active, false}, {keepalive, true}],
+    Opts = [binary, {active, once}, {keepalive, true}],
     case gen_tcp:connect(Host, Port, Opts, Timeout) of
         {ok, Socket} ->
             {ok, #state{ config = Conf, handle = Socket }};
