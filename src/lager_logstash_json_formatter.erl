@@ -61,4 +61,6 @@ convert({K, Atom}, Acc) when is_atom(Atom) ->
 convert(Else, Acc) -> [Else | Acc].
 
 encode(jsx, Data)   -> jsx:encode(Data);
-encode(jiffy, Data) -> jiffy:encode({Data}).
+encode(jiffy, Data) -> jiffy:encode({Data});
+encode(msgpack, Data) -> msgpack:pack(Data).
+

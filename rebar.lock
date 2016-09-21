@@ -1,1 +1,8 @@
-[].
+[{<<"jsx">>,
+  {git,"https://github.com/talentdeficit/jsx.git",
+       {ref,"3074d4865b3385a050badf7828ad31490d860df5"}},
+  0},
+ {<<"msgpack">>,
+  {git,"https://github.com/msgpack/msgpack-erlang",
+       {ref,"f4639fb968a0dc011c8e3ed16558624997b80cf2"}},
+  0}].

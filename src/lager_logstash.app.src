@@ -5,5 +5,8 @@
   {mod, {lager_logstash_app, []}},
   {applications, [
   	kernel,
-         stdlib
+         stdlib,
+         
+         jsx,
+         msgpack
   ]}]}.
