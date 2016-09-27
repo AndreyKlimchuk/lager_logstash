@@ -133,7 +133,6 @@ create_worker(#state { output = Output } = State) ->
 
 read_tag(undefined) -> undefined;
 read_tag(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8);
-read_tag(Str) when is_list(Str) -> iolist_to_binary(Str);
 read_tag(L) when is_list(L) ->
     valid_tag_list(L).
 
