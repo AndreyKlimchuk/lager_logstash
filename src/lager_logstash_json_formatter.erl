@@ -28,16 +28,16 @@ format(LagerMsg, #{ json_encoder := Encoder, tag := T }) ->
     Timestamp = timestamp(lager_msg:datetime(LagerMsg)),
     Message = lager_msg:message(LagerMsg),
     Metadata = lager_msg:metadata(LagerMsg),
-    Tag = case T of
+    Tags = case T of
        undefined -> [];
-       Val -> [{environment, Val}]
+       List -> List
     end,
     Data = [
         {type, lager_logstash},
         {level, Level},
         {'@timestamp', Timestamp},
         {message, Message} | convert_metadata(Metadata)],
-    [encode(Encoder, convert(Tag ++ Data)), $\n].
+    [encode(Encoder, convert(Tags ++ Data)), $\n].
 
 timestamp({Date, Time}) -> [Date, $T, Time].
 

@@ -57,8 +57,12 @@ init(Args) ->
     Output = arg(output, Args, ?DEFAULT_OUTPUT),
     Encoder = arg(json_encoder, Args, ?DEFAULT_ENCODER),
     Config = case read_tag(arg(tag, Args, ?DEFAULT_TAG)) of
-        undefined -> #{ json_encoder => Encoder, tag => undefined };
-        T -> #{ json_encoder => Encoder, tag => T }
+                 undefined ->
+                     #{ json_encoder => Encoder,
+                        tag => undefined };
+                 T ->
+                     #{ json_encoder => Encoder,
+                        tag => T }
     end,
 
     {ok, create_worker(#state{
@@ -129,4 +133,22 @@ create_worker(#state { output = Output } = State) ->
 
 read_tag(undefined) -> undefined;
 read_tag(Atom) when is_atom(Atom) -> atom_to_binary(Atom, utf8);
-read_tag(Str) when is_list(Str) -> iolist_to_binary(Str).
+read_tag(Str) when is_list(Str) -> iolist_to_binary(Str);
+read_tag(L) when is_list(L) ->
+    valid_tag_list(L).
+
+valid_tag_list([]) -> [];
+valid_tag_list([{K, V} | KVs]) -> 
+    ok = valid_key(K),
+    ok = valid_value(V),
+    [{K,V} | valid_tag_list(KVs)].
+
+valid_key(A) when is_atom(A) -> ok;
+valid_key(B) when is_binary(B) -> ok.
+
+valid_value(B) when is_binary(B) -> ok;
+valid_value(S) when is_list(S) -> is_string(S).
+
+is_string([]) -> ok;
+is_string([C|Cs]) when C >= 0 andalso C < 256 -> is_string(Cs).
+    

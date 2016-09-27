@@ -1,6 +1,6 @@
 {application, lager_logstash,
  [{description, "Logstash backend for Lager"},
-  {vsn, "0.2.0"},
+  {vsn, "0.3.0"},
   {registered,[]},
   {mod, {lager_logstash_app, []}},
   {applications, [
