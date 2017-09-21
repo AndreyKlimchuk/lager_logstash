@@ -48,6 +48,8 @@ convert(Data) -> lists:foldl(fun convert/2, [], Data).
 convert({_, undefined}, Acc) -> Acc;
 convert({pid, Pid}, Acc) when is_pid(Pid) ->
     [{pid, list_to_binary(pid_to_list(Pid))} | Acc];
+convert({name, Pid}, Acc) when is_pid(Pid) ->
+    [{name, list_to_binary(pid_to_list(Pid))} | Acc];
 convert({K, List}, Acc) when is_list(List) ->
     [{K, iolist_to_binary(List)} | Acc];
 convert({K, Atom}, Acc) when is_atom(Atom) ->
