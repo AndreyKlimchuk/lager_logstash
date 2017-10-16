@@ -135,10 +135,19 @@ handle_info({reconnect, Output}, {initializing, _} = BufState) ->
     case connect(Output) of
         {ok, State} ->
             {noreply, reconnect_buf_drain(BufState, State)};
-        {error, timeout} ->
+        {error, nxdomain} ->
+            %% Keep a deliberately long timeout here to avoid thundering herds
+            %% against the DNS service
+            timer:send_after(60*1000, self(), {reconnect, Output}),
+            {noreply, BufState};
+
+        {error, Reason} when Reason == timeout;
+                             Reason == econnrefused ->
             timer:send_after(?RECONNECT_TIMEOUT, self(), {reconnect, Output}),
             {noreply, BufState};
-        {error, econnrefused} ->
+        {error, Reason} ->
+            %% Unknown errors should output warnings to us
+            error_logger:info_msg("Trying to connect to logstash had error reason ~p", [Reason]),
             timer:send_after(?RECONNECT_TIMEOUT, self(), {reconnect, Output}),
             {noreply, BufState}
     end;
