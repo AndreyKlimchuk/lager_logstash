@@ -41,7 +41,12 @@ format(LagerMsg, #{ json_encoder := Encoder, tag := T }) ->
 
 timestamp({Date, Time}) -> [Date, $T, Time].
 
-convert_metadata(M) -> M.
+convert_metadata(L) ->
+    [do_convert_metadata(M) || M <- L].
+
+do_convert_metadata({Key, Value}) when is_tuple(Value) ->
+    {Key, iolist_to_binary(io_lib:format("~p", [Value]))};
+do_convert_metadata(M) -> M.
 
 convert(Data) -> lists:foldl(fun convert/2, [], Data).
 
