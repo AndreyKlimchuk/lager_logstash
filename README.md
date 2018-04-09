@@ -73,6 +73,12 @@ Here's how you would use the included JSON formatter with the
 
 ## Changelog
 
+#### 0.1.4
+
+  * Convert tuples in metadata to a binary before passing it to the
+    JSON encoder. This should solve a crash when processes are named
+    using via-tuples in a process registry like `gproc`.
+
 #### 0.1.3
 
   * Small fixes
