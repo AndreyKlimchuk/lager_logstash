@@ -52,6 +52,7 @@
          }).
 
 init(Args) ->
+    {ok, _} = application:ensure_all_started(lager_logstash),
     Level = arg(level, Args, ?DEFAULT_LEVEL),
     LevelNumber = lager_util:level_to_num(Level),
     Output = arg(output, Args, ?DEFAULT_OUTPUT),
